@@ -27,12 +27,12 @@ class NetworkConfig {
   // Get the base URL based on the platform
   static String getBaseUrl() {
     // Use the same IP for all platforms with port 8002
-    return 'http://172.16.13.142:8002';
+    return 'http://172.16.13.142:8000';
   }
 
   // Get the API URL
   static String getApiUrl() {
     // Force use of the specified IP for API calls with port 8002
-    return 'http://172.16.13.142:8002/api';
+    return 'http://172.16.13.142:8000/api';
   }
 }

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
 import 'welcome_screen.dart';
 import 'profil.dart';
@@ -28,6 +29,7 @@ class _EnseignantPageState extends State<EnseignantPage> {
   String userType = '';
   String firstName = '';
   String lastName = '';
+  String? imageUrl;
 
   // Services
   final ReclamationService _reclamationService = ReclamationService();
@@ -116,6 +118,8 @@ class _EnseignantPageState extends State<EnseignantPage> {
           userType = userData['role'] ?? '';
           firstName = userData['first_name'] ?? '';
           lastName = userData['last_name'] ?? '';
+          imageUrl = userData['image'];
+          print("DEBUG - Loaded user image URL: $imageUrl");
         });
 
         // Load data based on user type
@@ -1171,16 +1175,33 @@ class _EnseignantPageState extends State<EnseignantPage> {
           Flexible(
             child: Row(
               children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.blue, width: 2),
-                    // Use a color instead of an image since the asset is missing
-                    color: Colors.blue[100],
-                  ),
-                ),
+                imageUrl != null && imageUrl!.isNotEmpty
+                    ? Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.blue, width: 2),
+                        image: DecorationImage(
+                          image: NetworkImage(imageUrl!),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    )
+                    : Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.blue, width: 2),
+                        color: Colors.blue[100],
+                      ),
+                      child: Icon(
+                        Icons.person,
+                        color: Colors.blue[800],
+                        size: 30,
+                      ),
+                    ),
                 const SizedBox(width: 12),
                 Flexible(
                   child: Column(

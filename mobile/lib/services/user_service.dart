@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/network_config.dart';
 
@@ -192,6 +194,88 @@ class UserService {
       }
     } catch (e) {
       print('DEBUG - Error updating user data: $e');
+      rethrow;
+    }
+  }
+
+  // Update user data with image
+  Future<Map<String, dynamic>> updateUserWithImage(
+    String firstName,
+    String lastName,
+    File imageFile,
+  ) async {
+    try {
+      final token = await _getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      final userId = await getUserIdFromToken();
+      if (userId == null) {
+        throw Exception('Could not get user ID');
+      }
+
+      print('DEBUG - Updating user data with image for ID: $userId');
+
+      // Create multipart request
+      var request = http.MultipartRequest(
+        'PATCH',
+        Uri.parse('$baseUrl/users/user/update/$userId/'),
+      );
+
+      // Add authorization header
+      request.headers['Authorization'] = 'Bearer $token';
+
+      // Add text fields
+      request.fields['first_name'] = firstName;
+      request.fields['last_name'] = lastName;
+
+      // Add image file
+      var imageStream = http.ByteStream(imageFile.openRead());
+      var length = await imageFile.length();
+
+      var multipartFile = http.MultipartFile(
+        'image',
+        imageStream,
+        length,
+        filename: 'profile_image.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      );
+
+      request.files.add(multipartFile);
+
+      // Send request
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
+
+      print(
+        'DEBUG - Update user with image response status: ${response.statusCode}',
+      );
+      print('DEBUG - Update user with image response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // Update user data in shared preferences
+        final prefs = await SharedPreferences.getInstance();
+        final userJson = prefs.getString('user');
+
+        if (userJson != null) {
+          final userData = jsonDecode(userJson);
+          userData['first_name'] = firstName;
+          userData['last_name'] = lastName;
+          userData['image'] = data['image']; // Update image URL
+          await prefs.setString('user', jsonEncode(userData));
+        }
+
+        return data;
+      } else {
+        throw Exception(
+          'Failed to update user data with image: ${response.body}',
+        );
+      }
+    } catch (e) {
+      print('DEBUG - Error updating user data with image: $e');
       rethrow;
     }
   }

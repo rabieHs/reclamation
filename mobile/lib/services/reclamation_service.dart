@@ -141,12 +141,12 @@ class ReclamationService {
       }
 
       print(
-        'DEBUG - getAllReclamations: Making request to $baseUrl/api/reclamations/',
+        'DEBUG - getAllReclamations: Making request to $baseUrl/api/reclamations/status/terminees',
       );
       print('DEBUG - getAllReclamations: Using token: $token');
 
       final response = await http.get(
-        Uri.parse('$baseUrl/api/reclamations/'),
+        Uri.parse('$baseUrl/api/reclamations/status/terminees'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -160,7 +160,9 @@ class ReclamationService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('DEBUG - getAllReclamations: Parsed ${data.length} reclamations');
+        print(
+          'DEBUG - getAllReclamations: Parsed ${data.length} reclamations/status/terminees',
+        );
 
         // Print details of each reclamation
         for (var i = 0; i < data.length && i < 3; i++) {
@@ -168,7 +170,6 @@ class ReclamationService {
             'DEBUG - getAllReclamations: Reclamation $i: ${jsonEncode(data[i])}',
           );
         }
-
         return data;
       } else if (response.statusCode == 401) {
         print('DEBUG - getAllReclamations: Authentication failed');
@@ -181,6 +182,136 @@ class ReclamationService {
       }
     } catch (e) {
       print('DEBUG - getAllReclamations: Error: $e');
+      rethrow;
+    }
+  }
+
+  // Search reclamations by intervention keywords
+  Future<List<dynamic>> searchReclamationsByKeywords(String keywords) async {
+    try {
+      final token = await _getToken();
+      if (token == null) {
+        print('DEBUG - searchReclamationsByKeywords: Not authenticated');
+        throw Exception('Not authenticated');
+      }
+
+      print('DEBUG - Searching reclamations with keywords: $keywords');
+
+      // First get all terminated reclamations
+      final reclamations = await getAllReclamations();
+
+      // If keywords is empty, return all terminated reclamations
+      if (keywords.isEmpty) {
+        return reclamations;
+      }
+
+      // For each reclamation, fetch its interventions
+      List<dynamic> filteredReclamations = [];
+
+      for (var reclamation in reclamations) {
+        try {
+          // Get interventions for this reclamation
+          final interventions = await getInterventionsForReclamation(
+            reclamation['id'],
+          );
+
+          // Check if any intervention has matching keywords
+          bool hasMatch = false;
+          for (var intervention in interventions) {
+            // Check if mots_cles contains the search keywords
+            if (intervention['mots_cles'] != null &&
+                intervention['mots_cles'].toString().toLowerCase().contains(
+                  keywords.toLowerCase(),
+                )) {
+              hasMatch = true;
+              break;
+            }
+
+            // Also check other fields that might contain relevant information
+            if ((intervention['probleme_constate'] != null &&
+                    intervention['probleme_constate']
+                        .toString()
+                        .toLowerCase()
+                        .contains(keywords.toLowerCase())) ||
+                (intervention['analyse_cause'] != null &&
+                    intervention['analyse_cause']
+                        .toString()
+                        .toLowerCase()
+                        .contains(keywords.toLowerCase())) ||
+                (intervention['actions_entreprises'] != null &&
+                    intervention['actions_entreprises']
+                        .toString()
+                        .toLowerCase()
+                        .contains(keywords.toLowerCase())) ||
+                (intervention['recommandations'] != null &&
+                    intervention['recommandations']
+                        .toString()
+                        .toLowerCase()
+                        .contains(keywords.toLowerCase()))) {
+              hasMatch = true;
+              break;
+            }
+          }
+
+          // If any intervention matched, add this reclamation to results
+          if (hasMatch) {
+            // Store the matching interventions with the reclamation for easy access
+            reclamation['matching_interventions'] = interventions;
+            filteredReclamations.add(reclamation);
+          }
+        } catch (e) {
+          print(
+            'DEBUG - Error fetching interventions for reclamation ${reclamation['id']}: $e',
+          );
+          // Continue with next reclamation
+        }
+      }
+
+      return filteredReclamations;
+    } catch (e) {
+      print('DEBUG - searchReclamationsByKeywords: Error: $e');
+      rethrow;
+    }
+  }
+
+  // Get interventions for a specific reclamation
+  Future<List<dynamic>> getInterventionsForReclamation(
+    int reclamationId,
+  ) async {
+    try {
+      final token = await _getToken();
+      if (token == null) {
+        throw Exception('Not authenticated');
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/interventions/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final allInterventions = jsonDecode(response.body);
+
+        // Filter interventions for this reclamation
+        final reclamationInterventions =
+            allInterventions
+                .where(
+                  (intervention) =>
+                      intervention['reclamation'] == reclamationId,
+                )
+                .toList();
+
+        return reclamationInterventions;
+      } else {
+        throw Exception('Failed to load interventions: ${response.body}');
+      }
+    } catch (e) {
+      print(
+        'DEBUG - Error getting interventions for reclamation $reclamationId: $e',
+      );
       rethrow;
     }
   }

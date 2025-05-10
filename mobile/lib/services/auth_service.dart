@@ -110,6 +110,7 @@ class AuthService {
       // Check if the response is valid JSON
       try {
         final data = jsonDecode(response.body);
+        print('Login response data: $data');
 
         if (response.statusCode == 200 && data.containsKey('access')) {
           // Store tokens
@@ -119,6 +120,7 @@ class AuthService {
           return {'success': false, 'error': data['error'] ?? 'Login failed'};
         }
       } catch (e) {
+        print(e);
         // If the response is not valid JSON, return the error
         return {
           'success': false,

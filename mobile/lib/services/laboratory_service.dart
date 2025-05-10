@@ -36,7 +36,6 @@ class LaboratoryService {
       'DEBUG - Laboratory Service - Making request to: $baseUrl/api/laboratoires/',
     );
     print('DEBUG - Laboratory Service - Using token: $token');
-
     final response = await http.get(
       Uri.parse('$baseUrl/api/laboratoires/'),
       headers: {
@@ -120,6 +119,39 @@ class LaboratoryService {
       return jsonDecode(response.body);
     } else {
       throw Exception('Failed to load PC details: ${response.body}');
+    }
+  }
+
+  // Search laboratories by name or other attributes
+  Future<List<dynamic>> searchLaboratories(String query) async {
+    final token = await _getToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+
+    print(
+      'DEBUG - Laboratory Service - Searching laboratories with query: $query',
+    );
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/laboratoires/?search=$query'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    print(
+      'DEBUG - Laboratory Service - Search response status code: ${response.statusCode}',
+    );
+    print(
+      'DEBUG - Laboratory Service - Search response body: ${response.body}',
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to search laboratories: ${response.body}');
     }
   }
 }

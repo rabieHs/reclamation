@@ -37,12 +37,45 @@ class _EnseignantPageState extends State<EnseignantPage> {
   List<dynamic> allReclamations = [];
   List<dynamic> userReclamations = [];
   List<dynamic> laboratories = [];
+  List<dynamic> filteredLaboratories = [];
   Map<int, List<dynamic>> labPCs = {};
+  List<dynamic> filteredReclamations = [];
+  String searchKeywords = '';
+  String labSearchKeywords = '';
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+  }
+
+  // Search laboratories by name or other attributes
+  void _searchLaboratories(String query) {
+    setState(() {
+      labSearchKeywords = query;
+      if (query.isEmpty) {
+        filteredLaboratories = laboratories;
+      } else {
+        filteredLaboratories =
+            laboratories.where((lab) {
+              final name = lab['nom']?.toString().toLowerCase() ?? '';
+              final model =
+                  lab['modele_postes']?.toString().toLowerCase() ?? '';
+              final processor =
+                  lab['processeur']?.toString().toLowerCase() ?? '';
+              final ram = lab['memoire_ram']?.toString().toLowerCase() ?? '';
+              final storage = lab['stockage']?.toString().toLowerCase() ?? '';
+
+              final searchLower = query.toLowerCase();
+
+              return name.contains(searchLower) ||
+                  model.contains(searchLower) ||
+                  processor.contains(searchLower) ||
+                  ram.contains(searchLower) ||
+                  storage.contains(searchLower);
+            }).toList();
+      }
+    });
   }
 
   Future<void> _loadUserData() async {
@@ -109,6 +142,8 @@ class _EnseignantPageState extends State<EnseignantPage> {
         if (mounted) {
           setState(() {
             allReclamations = reclamations;
+            filteredReclamations =
+                reclamations; // Initialize filtered reclamations
           });
         }
       } catch (e) {
@@ -167,6 +202,7 @@ class _EnseignantPageState extends State<EnseignantPage> {
         if (mounted) {
           setState(() {
             laboratories = labs;
+            filteredLaboratories = labs; // Initialize filtered labs
           });
         }
 
@@ -1377,7 +1413,7 @@ class _EnseignantPageState extends State<EnseignantPage> {
               padding: const EdgeInsets.all(16),
               child: TextField(
                 decoration: InputDecoration(
-                  hintText: 'Rechercher un labo...',
+                  hintText: 'Rechercher une fiche technique...',
                   prefixIcon: const Icon(Icons.search, color: Colors.blue),
                   filled: true,
                   fillColor: Colors.grey[100],
@@ -1390,27 +1426,58 @@ class _EnseignantPageState extends State<EnseignantPage> {
                     horizontal: 16,
                   ),
                 ),
+                onChanged: _searchLaboratories,
               ),
             ),
 
           if (_currentIndex == 0)
-            // Refresh button for "Toutes les Réclamations"
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _refreshData,
-                icon: const Icon(Icons.refresh),
-                label: const Text("Actualiser les réclamations"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[700],
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+            Column(
+              children: [
+                // Search bar for reclamations
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher par mots-clés...',
+                      prefixIcon: const Icon(Icons.search, color: Colors.blue),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 16,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        searchKeywords = value;
+                      });
+                      _searchReclamations(value);
+                    },
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-              ),
+                // Refresh button for "Toutes les Réclamations"
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _refreshData,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text("Actualiser les réclamations"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
             ),
 
           if (_currentIndex == 2)
@@ -1466,19 +1533,186 @@ class _EnseignantPageState extends State<EnseignantPage> {
     );
   }
 
+  // Search reclamations by keywords
+  Future<void> _searchReclamations(String keywords) async {
+    try {
+      if (keywords.isEmpty) {
+        // If search is empty, show all terminated reclamations
+        setState(() {
+          filteredReclamations = allReclamations;
+        });
+        return;
+      }
+
+      // Show loading indicator
+      setState(() {
+        filteredReclamations = [];
+      });
+
+      // Search reclamations by keywords
+      final results = await _reclamationService.searchReclamationsByKeywords(
+        keywords,
+      );
+
+      // Update UI with results
+      if (mounted) {
+        setState(() {
+          filteredReclamations = results;
+        });
+      }
+    } catch (e) {
+      // Handle error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la recherche: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Show intervention details dialog
+  void _showInterventionDetails(Map<String, dynamic> reclamation) {
+    // Get interventions from the reclamation
+    final interventions =
+        reclamation['matching_interventions'] as List<dynamic>? ?? [];
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            'Détails de l\'intervention',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              color: Colors.blue[800],
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDetailSection('Réclamation', [
+                  _buildDetailItem(
+                    Icons.info_outline,
+                    'ID: ${reclamation['id']}',
+                  ),
+                  _buildDetailItem(
+                    Icons.category,
+                    'Catégorie: ${reclamation['category'] ?? 'Non spécifiée'}',
+                  ),
+                  _buildDetailItem(
+                    Icons.location_on,
+                    'Lieu: ${reclamation['lieu'] ?? 'Non spécifié'}',
+                  ),
+                  _buildDetailItem(
+                    Icons.calendar_today,
+                    'Date: ${reclamation['date_creation']?.substring(0, 10) ?? 'Non spécifiée'}',
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                _buildDetailSection('Interventions (${interventions.length})', [
+                  if (interventions.isEmpty)
+                    const Text('Aucune intervention trouvée')
+                  else
+                    ...interventions.map(
+                      (intervention) => _buildInterventionItem(intervention),
+                    ),
+                ]),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: Text(
+                'Fermer',
+                style: GoogleFonts.poppins(color: Colors.blue),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Build intervention item
+  Widget _buildInterventionItem(Map<String, dynamic> intervention) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue[100]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (intervention['probleme_constate'] != null)
+            _buildDetailItem(
+              Icons.error_outline,
+              'Problème: ${intervention['probleme_constate']}',
+            ),
+          if (intervention['analyse_cause'] != null)
+            _buildDetailItem(
+              Icons.search,
+              'Cause: ${intervention['analyse_cause']}',
+            ),
+          if (intervention['actions_entreprises'] != null)
+            _buildDetailItem(
+              Icons.build,
+              'Actions: ${intervention['actions_entreprises']}',
+            ),
+          if (intervention['recommandations'] != null)
+            _buildDetailItem(
+              Icons.lightbulb_outline,
+              'Recommandations: ${intervention['recommandations']}',
+            ),
+          if (intervention['mots_cles'] != null)
+            _buildDetailItem(
+              Icons.label_outline,
+              'Mots-clés: ${intervention['mots_cles']}',
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildContent() {
     switch (_currentIndex) {
       case 0:
         // Show all reclamations for all users
-        if (allReclamations.isEmpty) {
-          return const Center(child: Text('Aucune réclamation trouvée'));
+        if (searchKeywords.isNotEmpty) {
+          // If search is active, show filtered reclamations
+          if (filteredReclamations.isEmpty) {
+            return const Center(
+              child: Text('Aucune réclamation trouvée pour cette recherche'),
+            );
+          }
+          return _buildReclamationsListFromAPI(filteredReclamations);
+        } else {
+          // Otherwise show all terminated reclamations
+          if (allReclamations.isEmpty) {
+            return const Center(child: Text('Aucune réclamation trouvée'));
+          }
+          return _buildReclamationsListFromAPI(allReclamations);
         }
-
-        return _buildReclamationsListFromAPI(allReclamations);
 
       case 1:
         if (laboratories.isEmpty) {
           return const Center(child: Text('Aucun laboratoire trouvé'));
+        }
+
+        if (labSearchKeywords.isNotEmpty && filteredLaboratories.isEmpty) {
+          return const Center(
+            child: Text('Aucun laboratoire trouvé pour cette recherche'),
+          );
         }
 
         return _buildLabosListFromAPI();
@@ -1572,6 +1806,16 @@ class _EnseignantPageState extends State<EnseignantPage> {
                     color: Colors.grey[600],
                   ),
                 ),
+                // Show keywords if available from search
+                if (reclamation['matching_interventions'] != null)
+                  Text(
+                    'Mots-clés: ${_getKeywordsFromInterventions(reclamation['matching_interventions'])}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.blue[600],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
               ],
             ),
             trailing: const Icon(
@@ -1579,6 +1823,10 @@ class _EnseignantPageState extends State<EnseignantPage> {
               size: 14,
               color: Colors.blue,
             ),
+            onTap: () {
+              // Show intervention details when reclamation is clicked
+              _showInterventionDetails(reclamation);
+            },
           ),
         );
       },
@@ -1598,12 +1846,31 @@ class _EnseignantPageState extends State<EnseignantPage> {
     }
   }
 
+  // Extract keywords from interventions
+  String _getKeywordsFromInterventions(List<dynamic>? interventions) {
+    if (interventions == null || interventions.isEmpty) {
+      return '';
+    }
+
+    // Collect all keywords from interventions
+    final List<String> allKeywords = [];
+    for (var intervention in interventions) {
+      if (intervention['mots_cles'] != null &&
+          intervention['mots_cles'].toString().isNotEmpty) {
+        allKeywords.add(intervention['mots_cles'].toString());
+      }
+    }
+
+    // Return comma-separated keywords
+    return allKeywords.join(', ');
+  }
+
   Widget _buildLabosListFromAPI() {
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 16),
-      itemCount: laboratories.length,
+      itemCount: filteredLaboratories.length,
       itemBuilder: (context, index) {
-        final laboratory = laboratories[index];
+        final laboratory = filteredLaboratories[index];
         final labId = laboratory['id'];
         final pcs = labPCs[labId] ?? [];
 
